@@ -27,12 +27,14 @@ func main() {
 
 	var m2 vision.Matrix
 	switch strings.ToLower(algo) {
+	case "blur":
+		m2 = vision.Blur(m, 13, 1)
 	case "sobel":
 		m2 = vision.Sobel(m)
 	case "canny":
 		m2 = vision.Canny(m)
-	case "blur":
-		m2 = vision.Blur(m, 13, 1)
+	case "hough":
+		m2 = vision.Hough(m)
 	default:
 		fmt.Println("not supported")
 		os.Exit(1)

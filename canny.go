@@ -66,7 +66,7 @@ func Canny(m Matrix) Matrix {
 			panic("unexpected angel")
 		}
 
-		const upper = 25
+		const upper = 10
 		if maximal && g.At(i, j) > upper {
 			out.Set(i, j, 0xff)
 		} else {

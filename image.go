@@ -4,7 +4,10 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
+	"io"
 	"os"
+	"strings"
 )
 
 func LoadGrayImage(path string) (Matrix, error) {
@@ -13,7 +16,14 @@ func LoadGrayImage(path string) (Matrix, error) {
 		return nil, err
 	}
 
-	decoded, err := jpeg.Decode(f)
+	var decoder func(io.Reader) (image.Image, error)
+	if strings.HasSuffix(path, ".png") {
+		decoder = png.Decode
+	} else {
+		decoder = jpeg.Decode
+	}
+
+	decoded, err := decoder(f)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +42,13 @@ func LoadGrayImage(path string) (Matrix, error) {
 }
 
 func SaveGrayImage(m Matrix, path string) error {
+	var encoder func(io.Writer, image.Image) error
+	if strings.HasSuffix(path, ".png") {
+		encoder = png.Encode
+	} else {
+		encoder = func(w io.Writer, m image.Image) error { return jpeg.Encode(w, m, nil) }
+	}
+
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -43,5 +60,5 @@ func SaveGrayImage(m Matrix, path string) error {
 		gray.Set(i, j, color.Gray{uint8(value)})
 	})
 
-	return jpeg.Encode(f, gray, nil)
+	return encoder(f, gray)
 }
