@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func LoadGrayImage(path string) (Matrix, error) {
+func LoadGrayImageMatrix(path string) (Matrix, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func LoadGrayImage(path string) (Matrix, error) {
 	return m, nil
 }
 
-func SaveGrayImage(m Matrix, path string) error {
+func SaveGrayImageMatrix(m Matrix, path string) error {
 	var encoder func(io.Writer, image.Image) error
 	if strings.HasSuffix(path, ".png") {
 		encoder = png.Encode

@@ -19,7 +19,7 @@ func main() {
 		output = os.Args[3]
 	)
 
-	m, err := vision.LoadGrayImage(input)
+	m, err := vision.LoadGrayImageMatrix(input)
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = vision.SaveGrayImage(m2, output)
+	err = vision.SaveGrayImageMatrix(m2, output)
 	if err != nil {
 		panic(err)
 	}

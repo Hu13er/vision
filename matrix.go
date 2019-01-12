@@ -1,5 +1,9 @@
 package vision
 
+import (
+	"fmt"
+)
+
 type Matrix interface {
 	At(i, j int) float64
 	Set(i, j int, value float64)
@@ -100,4 +104,14 @@ func Mult(m Matrix, c float64) Matrix {
 		out.Set(i, j, c*value)
 	})
 	return out
+}
+
+func Maybe(f func()) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	f()
+	return
 }
