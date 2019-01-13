@@ -106,6 +106,14 @@ func Mult(m Matrix, c float64) Matrix {
 	return out
 }
 
+func Sig(m1 Matrix, m2 Matrix) Matrix {
+	m := NewMatrix(m1.Dims())
+	Iterate(m, func(i, j int, _ float64) {
+		m.Set(i, j, m1.At(i, j)*m2.At(i, j))
+	})
+	return m
+}
+
 func Maybe(f func()) (err error) {
 	defer func() {
 		if r := recover(); r != nil {

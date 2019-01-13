@@ -174,8 +174,53 @@ type KeyPoint struct {
 	Feature []float64
 }
 
-func (kp *KeyPoint) Calculate() {
-	// TODO
+func (kp *KeyPoint) Calculate(sigma float64) {
+	g := newGaussKernel(1.6, sigma)
+	maxOrient := kp.MaxOrientation(kp.X-8, kp.Y-8, kp.X+8, kp.Y+8)
+	features := make([]float64, 0)
+
+	for x := kp.X - 8; x < kp.X+8; x += 4 {
+		for y := kp.Y - 8; y < kp.Y; y += 4 {
+			bin := make([]float64, 8)
+			mg := Slice(kp.Octave.GMain.G, x, y, x+3, y+3)
+			mg = Sig(mg, g)
+			mt := Slice(kp.Octave.GMain.Teta, x, y, x+3, y+3)
+
+			Iterate(mt, func(i, j int, teta float64) {
+				td := angelDesct(teta - maxOrient)
+				bin[td] += mg.At(i, j)
+			})
+
+			features = append(features, bin...)
+		}
+	}
+
+	kp.Feature = features
+	kp.NormalizeFeatures()
+}
+
+func (kp *KeyPoint) NormalizeFeatures() {
+	var sum float64
+	for _, f := range kp.Feature {
+		sum += f * f
+	}
+
+	h := math.Sqrt(sum)
+	for i, f := range kp.Feature {
+		kp.Feature[i] = f / h
+	}
+}
+
+func (kp *KeyPoint) MaxOrientation(x1, y1, x2, y2 int) float64 {
+	mx, or := -1e8, 0.0
+	IterateSlice(kp.Octave.GMain.G, x1, y1, x2, y2,
+		func(i, j int, v float64) {
+			if v > mx {
+				mx = v
+				or = kp.Octave.GMain.Teta.At(i, j)
+			}
+		})
+	return or
 }
 
 type Gradian struct {
@@ -226,6 +271,17 @@ func G(m Matrix) Gradian {
 	})
 
 	return g
+}
+
+func angelDesct(t float64) int {
+	for i := 0; i < 8; i++ {
+		a := float64(i) * 45.0
+		b := a + 45.0
+		if a <= t && t < b {
+			return i
+		}
+	}
+	return 0
 }
 
 func imageToMatrix(img image.Image) Matrix {
