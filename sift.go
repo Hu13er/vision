@@ -41,7 +41,9 @@ func (s *Sift) KeyPoints() []KeyPoint {
 		log.Println("Found", len(candidates), "candidates")
 		th := candidates.cPercentBest(20.0)
 		log.Println(20, "percent best:", th)
-		kps := candidates.FilterCandidates(th)
+		// thOneDim := 0.0 / 2 // Gx and Gy
+		kps := candidates.FilterCandidates(10.0, 10.0)
+		log.Println("Got", len(kps), "keypoints.")
 		result = append(result, kps...)
 	}
 
@@ -198,11 +200,12 @@ func (kps KeyPoints) cPercentBest(c float64) float64 {
 	return kps[n].DoG.G.G.At(x, y)
 }
 
-func (kps KeyPoints) FilterCandidates(th float64) []KeyPoint {
+func (kps KeyPoints) FilterCandidates(thX, thY float64) []KeyPoint {
 	outp := make([]KeyPoint, 0)
 	for _, kp := range kps {
-		g := kp.DoG.G.G.At(kp.X, kp.Y)
-		if g < th {
+		gx := kp.DoG.G.GX.At(kp.X, kp.Y)
+		gy := kp.DoG.G.GY.At(kp.X, kp.Y)
+		if gx < thX || gy < thY {
 			continue
 		}
 		outp = append(outp, kp)
