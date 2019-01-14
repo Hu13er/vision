@@ -10,6 +10,29 @@ import (
 	"strings"
 )
 
+func LoadGrayImage(path string) (*image.Gray, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	img, err := jpeg.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+
+	dx, dy := img.Bounds().Dx(), img.Bounds().Dy()
+	gray := image.NewGray(img.Bounds())
+	for x := 0; x < dx; x++ {
+		for y := 0; y < dy; y++ {
+			gray.Set(x, y, color.GrayModel.Convert(img.At(x, y)))
+		}
+	}
+
+	return gray, nil
+}
+
 func LoadGrayImageMatrix(path string) (Matrix, error) {
 	f, err := os.Open(path)
 	if err != nil {

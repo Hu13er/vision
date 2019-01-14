@@ -1,9 +1,12 @@
 package vision
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"log"
 	"math"
+	"sort"
 
 	"github.com/coraldane/resize"
 )
@@ -34,8 +37,12 @@ func (s *Sift) KeyPoints() []KeyPoint {
 			K:      s.K,
 			Radius: s.Radius,
 		}
-		can := o.Init(s.OctaveCount).Candidates()
-		result = append(result, FilterCandidates(can, s.Thersh)...)
+		candidates := o.Init(s.OctaveCount, s.Thersh).Candidates()
+		log.Println("Found", len(candidates), "candidates")
+		th := candidates.cPercentBest(20.0)
+		log.Println(20, "percent best:", th)
+		kps := candidates.FilterCandidates(th)
+		result = append(result, kps...)
 	}
 
 	return result
@@ -43,12 +50,10 @@ func (s *Sift) KeyPoints() []KeyPoint {
 
 func (s *Sift) createImageScales() []image.Image {
 	outp := make([]image.Image, s.ScaleCount)
-	iterImg := s.Image
-	for i := range outp {
-		b := iterImg.Bounds()
-		scaled := resize.Resize(b.Dx()/2, b.Dy()/2, iterImg, resize.Bilinear)
-		iterImg = scaled
-		outp[i] = scaled
+	outp[0] = s.Image
+	for i := 1; i < len(outp); i++ {
+		b := outp[i-1].Bounds()
+		outp[i] = resize.Resize(b.Dx()/2, b.Dy()/2, outp[i-1], resize.Bilinear)
 	}
 	return outp
 }
@@ -67,9 +72,12 @@ type Octave struct {
 
 	Fadeing []Matrix
 	DoGs    []DoG
+
+	th float64
 }
 
-func (o *Octave) Init(count int) *Octave {
+func (o *Octave) Init(count int, th float64) *Octave {
+	o.th = th
 	o.GMain = G(o.Main)
 	o.Fade(count)
 	o.DoG()
@@ -100,7 +108,7 @@ func (o *Octave) DoG() {
 	}
 }
 
-func (o *Octave) Candidates() []KeyPoint {
+func (o *Octave) Candidates() KeyPoints {
 	max := func(a, b float64) float64 {
 		if a > b {
 			return a
@@ -114,48 +122,83 @@ func (o *Octave) Candidates() []KeyPoint {
 		return b
 	}
 
-	kp := make([]KeyPoint, 0)
-	for i, dog := range o.DoGs {
-		if i == 0 || i == len(o.DoGs)-1 {
-			continue
-		}
+	kps := make(KeyPoints, 0)
+	for idx := 1; idx < len(o.DoGs)-1; idx++ {
+		var (
+			doga = o.DoGs[idx-1]
+			dog  = o.DoGs[idx]
+			dogc = o.DoGs[idx+1]
+		)
 
 		bx, by := dog.Matrix.Dims()
 		IterateSlice(dog.Matrix, 1, 1, bx-2, by-2, func(i, j int, v float64) {
 
 			mini, maxi := 1e6, -1e6
-
-			doga := o.DoGs[i-1].Matrix
-			IterateSlice(doga, i-1, j-1, i+1, j+1, func(i, j int, v float64) {
+			IterateSlice(doga.Matrix, i-1, j-1, i+1, j+1, func(_, _ int, v float64) {
 				mini = min(mini, v)
 				maxi = max(maxi, v)
 			})
 
-			IterateSlice(dog.Matrix, i-1, j-1, i+1, j+1, func(i, j int, v float64) {
+			IterateSlice(dog.Matrix, i-1, j-1, i+1, j+1, func(i2, j2 int, v float64) {
+				if i2 == i && j2 == j2 {
+					return
+				}
 				mini = min(mini, v)
 				maxi = max(maxi, v)
 			})
 
-			dogc := o.DoGs[i+1].Matrix
-			IterateSlice(dogc, i-1, j-1, i+1, j+1, func(i, j int, v float64) {
+			IterateSlice(dogc.Matrix, i-1, j-1, i+1, j+1, func(_, _ int, v float64) {
 				mini = min(mini, v)
 				maxi = max(maxi, v)
 			})
 
 			if v <= mini || v >= maxi {
-				kp = append(kp, KeyPoint{
+				kp := KeyPoint{
 					Octave: o,
 					DoG:    &dog,
 					X:      i,
 					Y:      j,
-				})
+				}
+				if kp.Threshold(o.th) {
+					kps = append(kps, kp)
+				}
 			}
 		})
 	}
-	return kp
+	return kps
 }
 
-func FilterCandidates(kps []KeyPoint, th float64) []KeyPoint {
+type KeyPoints []KeyPoint
+
+func (kps KeyPoints) Swap(i, j int) {
+	kps[i], kps[j] = kps[j], kps[i]
+}
+
+func (kps KeyPoints) Len() int {
+	return len(kps)
+}
+
+func (kps KeyPoints) Less(i, j int) bool {
+	a := kps[i].DoG.G.G.At(kps[i].X, kps[i].Y)
+	b := kps[j].DoG.G.G.At(kps[j].X, kps[j].Y)
+	return a > b
+}
+
+func (kps KeyPoints) Sort() {
+	sort.Sort(kps)
+}
+
+func (kps KeyPoints) cPercentBest(c float64) float64 {
+	kps.Sort()
+	n := int(float64(kps.Len())*(c/100.0)) - 1
+	if n < 0 {
+		n = 0
+	}
+	x, y := kps[n].X, kps[n].Y
+	return kps[n].DoG.G.G.At(x, y)
+}
+
+func (kps KeyPoints) FilterCandidates(th float64) []KeyPoint {
 	outp := make([]KeyPoint, 0)
 	for _, kp := range kps {
 		g := kp.DoG.G.G.At(kp.X, kp.Y)
@@ -172,6 +215,10 @@ type KeyPoint struct {
 	DoG     *DoG
 	X, Y    int
 	Feature []float64
+}
+
+func (kp *KeyPoint) Threshold(th float64) bool {
+	return kp.DoG.G.G.At(kp.X, kp.Y) >= th
 }
 
 func (kp *KeyPoint) Calculate(sigma float64) {
@@ -221,6 +268,13 @@ func (kp *KeyPoint) MaxOrientation(x1, y1, x2, y2 int) float64 {
 			}
 		})
 	return or
+}
+
+func (kp KeyPoint) String() string {
+	dx, dy := kp.Octave.Main.Dims()
+	return fmt.Sprintf("KeyPoint{X: %d, Y: %d, Scale: (%d, %d)}",
+		kp.X, kp.Y,
+		dx, dy)
 }
 
 type Gradian struct {
